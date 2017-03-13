@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,23 +30,24 @@ type IdentityChainCode struct {
 }
 
 type Identity struct {
-	providerEnrollmentID     string //Mundane identity ID - Identity Provider given
-	identityCode             string //Issuer given identity ID
-	identityTypeCode         string //Virtual Identity Type Code (Issuer defined) - gotten from TCert
-	issuerCode               string //Virtual Identity Issuer Code - gotten from TCert
-	issuerOrganization       string //Virtual Identity Issuer Organization - gotten from TCert or Ecert
-	encryptedPayload         string // Encrypted Virtual Identity (EVI) payload
-	encryptedKey             string //Symmetric encryption key for EVI payload encrypted with the public key
-	metaData                 string //Miscellanous Identity Information - ONLY NON-SENSITIVE IDENTITY INFORMATION/ATTRIBUTES SHOULD BE ADDED
-	encryptedAttachment      string //Encrypted URIs to Virtual Identity Document e.g. Scanned document image
-	createdBy                string //Identity Creator
-	createdOnTxTimestamp     int64  //Created on Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
-	lastUpdatedBy            string //Last Updated By
-	lastUpdatedOnTxTimestamp int64  //Last Updated On Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
-
+	providerEnrollmentID     string `json:"providerEnrollmentID"`     //Mundane identity ID - Identity Provider given
+	identityCode             string `json:"identityCode"`             //Issuer given identity ID
+	identityTypeCode         string `json:"identityTypeCode"`         //Virtual Identity Type Code (Issuer defined) - gotten from TCert
+	issuerCode               string `json:"issuerCode"`               //Virtual Identity Issuer Code - gotten from TCert
+	issuerOrganization       string `json:"issuerOrganization"`       //Virtual Identity Issuer Organization - gotten from TCert or Ecert
+	encryptedPayload         string `json:"encryptedPayload"`         // Encrypted Virtual Identity (EVI) payload
+	encryptedKey             string `json:"encryptedKey"`             //Symmetric encryption key for EVI payload encrypted with the public key
+	metaData                 string `json:"metaData"`                 //Miscellanous Identity Information - ONLY NON-SENSITIVE IDENTITY INFORMATION/ATTRIBUTES SHOULD BE ADDED
+	encryptedAttachmentURI   string `json:"encryptedAttachmentURI"`   //Encrypted URIs to Virtual Identity Document e.g. Scanned document image
+	createdBy                string `json:"createdBy"`                //Identity Creator
+	createdOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`     //Created on Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
+	lastUpdatedBy            string `json:"lastUpdatedBy"`            //Last Updated By
+	lastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"` //Last Updated On Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
+	issuerVerified           bool   `json:"issuerVerified"`           //Identity verified by Issuer
 }
 
 type IdentityMin struct {
+	providerEnrollmentID     string `json:"providerEnrollmentID"`
 	identityCode             string `json:"identityCode"`
 	identityTypeCode         string `json:"identityTypeCode"`
 	issuerCode               string `json:"issuerCode"`
@@ -54,6 +56,7 @@ type IdentityMin struct {
 	createdOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
 	lastUpdatedBy            string `json:"lastUpdatedBy"`
 	lastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
+	issuerVerified           bool   `json:"issuerVerified"`
 }
 
 type Issuer struct {
@@ -117,56 +120,75 @@ func (t *IdentityChainCode) Init(stub shim.ChaincodeStubInterface, function stri
 //=================================================================================================================================
 //Initializes the Identity and sets the default states
 //=================================================================================================================================
-func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, providerEnrollmentID string, identityPublicKey string) (string, error) {
+func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	if len(args) < 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2 -> [providerEnrollmentID , identityPublicKey]")
+	}
+
+	var providerEnrollmentID, identityPublicKey string
+	providerEnrollmentID = args[0]
+	identityPublicKey = args[1]
 
 	//Verify that Enrollment ID and Pubic key is not null
 	if providerEnrollmentID == "" || identityPublicKey == "" {
-		return "", errors.New("Provider Enrollment ID or Public key cannot be null")
+		return nil, errors.New("Provider Enrollment ID or Public key cannot be null")
 	}
 
 	//Add Public key state
 	existingPKBytes, err := stub.GetState(providerEnrollmentID + PUBLIC_KEY_PREFIX)
 
 	if err == nil && existingPKBytes != nil {
-		return "", fmt.Errorf("Public Key for " + providerEnrollmentID + " already exists -> " + string(existingPKBytes[:]))
+		return nil, fmt.Errorf("Public Key for " + providerEnrollmentID + " already exists ")
 	}
 
 	pkBytes := []byte(identityPublicKey)
 
-	//Validate Public key
+	//Validate Public key is PEM format
 	err = validatePublicKey(pkBytes)
 
 	if err != nil {
-		return "", fmt.Errorf("Bad Public Key -> Public key must be in PEM format - [%v]", err)
+		return nil, fmt.Errorf("Bad Public Key -> Public key must be in PEM format - [%v]", err)
 	}
 
 	//Set Public key state
 	err = stub.PutState(providerEnrollmentID+PUBLIC_KEY_PREFIX, pkBytes)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed inserting public key, [%v] -> "+providerEnrollmentID, err)
+		return nil, fmt.Errorf("Failed inserting public key, [%v] -> "+providerEnrollmentID, err)
 	}
 
 	//Create Identity Table
 	err = t.createIdentityTable(stub, providerEnrollmentID)
 	if err != nil {
-		return "", fmt.Errorf("Failed creating Identity Table, [%v] -> "+providerEnrollmentID, err)
+		return nil, fmt.Errorf("Failed creating Identity Table, [%v] -> "+providerEnrollmentID, err)
 	}
 
 	//Broadcast 'New Enrollment'  Event with enrollment ID
 	err = stub.SetEvent(EVENT_NEW_IDENTITY_ENROLLED, []byte(providerEnrollmentID))
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to broadcast enrollment event, [%v] -> "+providerEnrollmentID, err)
+		return nil, fmt.Errorf("Failed to broadcast enrollment event, [%v] -> "+providerEnrollmentID, err)
 	}
 
-	return "Enrollment Successful", nil
+	return []bytes("Enrollment Successful"), nil
 }
 
 //=================================================================================================================================
 //Initializes new Issuer
 //=================================================================================================================================
-func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, issuerEnrollmentUserName string, issuerID string, issuerCode string, issuerOrganization string, identityTypeCodes string) ([]byte, error) {
+func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	if len(args) < 5 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 5 -> [issuerEnrollmentUserName , issuerID , issuerCode , issuerOrganization , identityTypeCodes]")
+	}
+
+	var issuerEnrollmentUserName, issuerID, issuerCode, issuerOrganization, identityTypeCodes string
+	issuerEnrollmentUserName = args[0]
+	issuerID = args[1]
+	issuerCode = args[2]
+	issuerOrganization = args[3]
+	identityTypeCodes = args[4]
 
 	//Check if user is provider
 	callerDetails, err := readCallerDetails(&stub)
@@ -187,16 +209,16 @@ func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, issuerE
 	var columns []shim.Column
 	//keyCol1 := shim.Column{Value: &shim.Column_String_{String_: issuerEnrollmentUserName}}
 	keyCol2 := shim.Column{Value: &shim.Column_String_{String_: issuerID}}
-	//keyCol3 := shim.Column{Value: &shim.Column_String_{String_: issuerCode}}
-	columns = append(columns, keyCol2)
+	keyCol3 := shim.Column{Value: &shim.Column_String_{String_: issuerCode}}
+	columns = append(columns, keyCol2, keyCol3)
 
-	row, err := stub.GetRow(ISSUER_TBL_NAME, columns)
+	exists, err := recordExistsInTable(&stub, ISSUER_TBL_NAME, columns)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error checking for existing issuers, [%v]", err)
 	}
-	if row.Columns[1].GetBytes() != nil {
-		return nil, errors.New("Issuer already exist -> " + string(row.Columns[0].GetBytes()) + " | " + string(row.Columns[1].GetBytes()) + " | " + string(row.Columns[2].GetBytes()))
+	if exists == true {
+		return nil, errors.New("Issuer ID or Code  already exist -> " + issuerID + "|" + issuerCode)
 	}
 
 	//Get Transaction TimeStamp
@@ -246,6 +268,16 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 	// Handle different functions
 	if function == "init" { //initialize the chaincode state, used as reset
 		return t.Init(stub, "init", args)
+	}
+	if function == "initIssuer" {
+		return t.InitIssuer(stub, args)
+	}
+
+	if function == "initIdentity" {
+		return t.InitIdentity(stub, args)
+	}
+	if function == "addIdentity" {
+		return t.AddIdentity(stub, args)
 	}
 	fmt.Println("invoke did not find func: " + function) //error
 
@@ -313,7 +345,7 @@ func (t *IdentityChainCode) createIssuerTable(stub shim.ChaincodeStubInterface) 
 
 	// Create Issuer table
 	tableErr := stub.CreateTable(ISSUER_TBL_NAME, []*shim.ColumnDefinition{
-		&shim.ColumnDefinition{Name: "IssuerUserName", Type: shim.ColumnDefinition_STRING, Key: true},
+		&shim.ColumnDefinition{Name: "IssuerUserName", Type: shim.ColumnDefinition_STRING, Key: false},
 		&shim.ColumnDefinition{Name: "IssuerID", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "IssuerCode", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "IssuerOrganization", Type: shim.ColumnDefinition_STRING, Key: false},
@@ -335,9 +367,9 @@ func (t *IdentityChainCode) createIssuerTable(stub shim.ChaincodeStubInterface) 
 //=================================================================================================================================
 //	 Add New Issued Identity
 //=================================================================================================================================
-func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identityParams []string) ([]byte, error) {
+func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identityParams []string) ([]byte, error) {
 
-	if len(identityParams) < 7 {
+	if len(identityParams) < 8 {
 		return nil, errors.New("Incomplete number of arguments. Expected 6")
 	}
 
@@ -355,23 +387,25 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 	issuerVerified := false
 
 	//For providers, issuer details are required to be submitted
+	//Parameters should be in the order -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI]
 	if isProvider == true {
 		//Check for empty mandatory fields (first 5 fields)
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 6; i++ {
 			if identityParams[i] == "" {
 				return nil, errors.New("One or more mandatory fields is empty. Mandatory fields are the first 5 which are ProviderEnrollmentID, IdentityCode, IdentityTypeCode, IdentityPayload and IssuerID")
 			}
 		}
-		issuerID = identityParams[4]
+		issuerID = identityParams[5]
 	} else {
 		//Issuer details are gotten from Transaction Certificate
 		//Check for empty mandatory fields
-		for i := 0; i < 4; i++ {
+		for i := 0; i < 5; i++ {
 			if identityParams[i] == "" {
 				return nil, errors.New("One or more mandatory fields is empty. Mandatory fields are the first 4 which are ProviderEnrollmentID, IdentityCode, IdentityTypeCode  and IdentityPayload")
 			}
 		}
 		issuerID = callerDetails.issuerID
+		issuerVerified = true
 	}
 
 	//Get existing issuer
@@ -379,17 +413,18 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 	keyCol1 := shim.Column{Value: &shim.Column_String_{String_: issuerID}}
 	columns = append(columns, keyCol1)
 
-	row, err := stub.GetRow(ISSUER_TBL_NAME, columns)
+	rowPointers, err := getRows(&stub, ISSUER_TBL_NAME, columns)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error checking for existing issuers, [%v]", err)
 	}
-	if row.Columns[1].GetBytes() == nil {
+	if len(rowPointers) == 0 {
 		return nil, errors.New("Issuer does not exist -> " + issuerID)
 	}
+	row := *rowPointers[0]
 
-	issuerCode = string(row.Columns[2].GetBytes())
-	issuerOrganization = string(row.Columns[3].GetBytes())
+	issuerCode = row.Columns[2].GetString_()
+	issuerOrganization = row.Columns[3].GetString_()
 
 	if strings.EqualFold(callerDetails.issuerCode, issuerCode) == false {
 		return nil, errors.New("Issuer code (Certificate and Store) don't match -> " + issuerID)
@@ -398,7 +433,7 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 	identityTypeCode := identityParams[2]
 
 	//Check for Identity Type code
-	identityTypeCodes := strings.Split(string(row.Columns[3].GetBytes()), ",")
+	identityTypeCodes := strings.Split(row.Columns[3].GetString_(), ",")
 	identityTypeCodeExists := false
 
 	for i := 0; i < len(identityTypeCodes); i++ {
@@ -412,13 +447,28 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 
 	providerEnrollmentID := identityParams[0]
 	identityCode := identityParams[1]
-	identityPayload := identityParams[3]
 
-	//Get Public Key
-	publicKey, err := stub.GetState(providerEnrollmentID + PUBLIC_KEY_PREFIX)
-
+	//Encrypted Payload
+	encryptedPayload, err := decodeBase64(identityParams[3])
 	if err != nil {
-		return nil, fmt.Errorf("Could not get Public Key for " + providerEnrollmentID)
+		return nil, fmt.Errorf("Bad Encrypted Payload [%v] ", err)
+	}
+
+	//Encrypted Key
+	encryptedKey, err := decodeBase64(identityParams[4])
+	if err != nil {
+		return nil, fmt.Errorf("Bad Encrypted Key [%v] ", err)
+	}
+
+	//Encrypted Payload
+	encryptedAttachmentURIString := identityParams[7]
+	var encryptedAttachmentURI []byte
+	if encryptedAttachmentURIString != "" {
+		encryptedAttachmentURI, err = decodeBase64(identityParams[3])
+		if err != nil {
+			return nil, fmt.Errorf("Bad Encrypted AttachmentURI [%v] ", err)
+		}
+
 	}
 
 	//Check if similar Identity exists
@@ -426,47 +476,15 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 	key2Col1 := shim.Column{Value: &shim.Column_String_{String_: identityCode}}
 	key2Col2 := shim.Column{Value: &shim.Column_String_{String_: identityTypeCode}}
 	key2Col3 := shim.Column{Value: &shim.Column_String_{String_: issuerCode}}
-	key2columns = append(columns, key2Col1, key2Col2, key2Col3)
+	key2columns = append(key2columns, key2Col1, key2Col2, key2Col3)
 
 	tableName := providerEnrollmentID + IDENTITY_TBL_PREFIX
 
 	identityRow, err := stub.GetRow(tableName, key2columns)
 
-	if err == nil && identityRow.Columns[0].GetBytes() != nil {
+	if err == nil && identityRow.Columns[0].GetString_() != "" {
 		return nil, fmt.Errorf("Identity already exists -> " + identityCode + "|" + identityTypeCode + "|" + issuerCode)
 	}
-
-	//Generate AES key
-	aesKey, err := generateKeyBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	//Encrypt IdentityPayload
-	encryptedPayload, err := encryptAES([]byte(identityPayload), aesKey)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error encrypting Payload, [%v]", err)
-	}
-
-	//Encrypt AttachmentURI
-	attachmentURI := identityParams[6]
-	var encryptedAttachmentURI []byte
-	if attachmentURI != "" {
-		encryptedAttachmentURI, err = encryptAES([]byte(attachmentURI), aesKey)
-
-		if err != nil {
-			return nil, fmt.Errorf("Error encrypting attachment URI, [%v]", err)
-		}
-	}
-
-	//Encrypt AES Key
-	encryptedKey, err := encryptRSA(aesKey, publicKey)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error encrypting DEK, [%v]", err)
-	}
-
 	//Get Transaction TimeStamp
 	stampPointer, err := stub.GetTxTimestamp()
 
@@ -488,8 +506,8 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 				&shim.Column{Value: &shim.Column_String_{String_: issuerCode}},
 				&shim.Column{Value: &shim.Column_String_{String_: issuerOrganization}},
 				&shim.Column{Value: &shim.Column_Bytes{Bytes: encryptedKey}},
-				&shim.Column{Value: &shim.Column_String_{String_: identityParams[5]}},
-				&shim.Column{Value: &shim.Column_Bool{Bool: false}},
+				&shim.Column{Value: &shim.Column_String_{String_: identityParams[6]}},
+				&shim.Column{Value: &shim.Column_Bool{Bool: issuerVerified}},
 				&shim.Column{Value: &shim.Column_Bytes{Bytes: encryptedAttachmentURI}},
 				&shim.Column{Value: &shim.Column_String_{String_: callerDetails.user}},
 				&shim.Column{Value: &shim.Column_Int64{Int64: timestamp.Seconds}},
@@ -514,15 +532,123 @@ func (t *IdentityChainCode) addIdentity(stub shim.ChaincodeStubInterface, identi
 
 }
 
-func (t *IdentityChainCode) getIdentities(stub shim.ChaincodeStubInterface, string enrollmentId) ([]byte, error) {
+func (t *IdentityChainCode) getIdentities(stub shim.ChaincodeStubInterface, enrollmentID string) ([]byte, error) {
 
 	//Check if user is provider
 	callerDetails, err := readCallerDetails(&stub)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
 	}
+
 	isProv := isProvider(callerDetails)
+	var columns []shim.Column = []shim.Column{}
+
 	if isProv == false {
-		return nil, errors.New("Access Denied")
+		keyCol1 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
+		columns = append(columns, keyCol1)
 	}
+
+	tableName := enrollmentID + IDENTITY_TBL_PREFIX
+	rowPointers, err := getRows(&stub, tableName, columns)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Identiites, [%v]", err)
+	}
+	var identities []IdentityMin
+	for _, rowPointer := range rowPointers {
+		row := *rowPointer
+		var identity = IdentityMin{}
+		identity.providerEnrollmentID = enrollmentID
+		identity.identityCode = row.Columns[1].GetString_()
+		identity.identityTypeCode = row.Columns[2].GetString_()
+		identity.issuerCode = row.Columns[4].GetString_()
+		identity.issuerOrganization = row.Columns[5].GetString_()
+		identity.createdBy = row.Columns[10].GetString_()
+		identity.createdOnTxTimestamp = row.Columns[11].GetInt64()
+		identity.lastUpdatedBy = row.Columns[12].GetString_()
+		identity.lastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
+		identity.issuerVerified = row.Columns[8].GetBool()
+
+		identities = append(identities, identity)
+
+	}
+
+	jsonRp, err := json.Marshal(identities)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Identiites, [%v]", err)
+
+	}
+
+	return []byte(jsonRp), nil
+
+}
+
+func (t *IdentityChainCode) getIdentity(stub shim.ChaincodeStubInterface, enrollmentID string, identityCode string) ([]byte, error) {
+
+	//Check if user is provider
+	callerDetails, err := readCallerDetails(&stub)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
+	}
+
+	isProv := isProvider(callerDetails)
+	var columns []shim.Column = []shim.Column{}
+	keyCol1 := shim.Column{Value: &shim.Column_String_{String_: identityCode}}
+	columns = append(columns, keyCol1)
+
+	if isProv == false {
+		keyCol2 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
+		columns = append(columns, keyCol2)
+	}
+
+	tableName := enrollmentID + IDENTITY_TBL_PREFIX
+	rowPointers, err := getRows(&stub, tableName, columns)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Identity, [%v]", err)
+	}
+
+	row := *rowPointers[0]
+	var identity = Identity{}
+	identity.providerEnrollmentID = enrollmentID
+	identity.identityCode = row.Columns[1].GetString_()
+	identity.identityTypeCode = row.Columns[2].GetString_()
+	identity.encryptedPayload = row.Columns[3].GetString_()
+	identity.issuerCode = row.Columns[4].GetString_()
+	identity.issuerOrganization = row.Columns[5].GetString_()
+	identity.encryptedKey = row.Columns[6].GetString_()
+	identity.metaData = row.Columns[7].GetString_()
+	identity.issuerVerified = row.Columns[8].GetBool()
+	identity.encryptedAttachmentURI = row.Columns[9].GetString_()
+	identity.createdBy = row.Columns[10].GetString_()
+	identity.createdOnTxTimestamp = row.Columns[11].GetInt64()
+	identity.lastUpdatedBy = row.Columns[12].GetString_()
+	identity.lastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
+
+	jsonRp, err := json.Marshal(identity)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Identity, [%v]", err)
+
+	}
+
+	return []byte(jsonRp), nil
+
+}
+
+func (t *IdentityChainCode) getPublicKey(stub shim.ChaincodeStubInterface, enrollmentID string) ([]byte, error) {
+	//Verify that Enrollment ID and Pubic key is not null
+	if enrollmentID == "" {
+		return nil, errors.New("Provider Enrollment ID  required")
+	}
+
+	//Add Public key state
+	existingPKBytes, err := stub.GetState(enrollmentID + PUBLIC_KEY_PREFIX)
+
+	if err == nil {
+		return nil, fmt.Errorf("Public Key for " + enrollmentID + "  does not exist")
+	}
+
+	return existingPKBytes, nil
 }

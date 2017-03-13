@@ -17,11 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -85,6 +80,47 @@ func readCallerDetails(stubPointer *shim.ChaincodeStubInterface) (CallerDetails,
 
 }
 
+func recordExistsInTable(stubPointer *shim.ChaincodeStubInterface, tableName string, columnKeys []shim.Column) (bool, error) {
+	stub := *stubPointer
+
+	var rowChannel <-chan shim.Row
+
+	rowChannel, err := stub.GetRows(tableName, columnKeys)
+	if err != nil {
+		return false, err
+	}
+	return len(rowChannel) >= 0, nil
+
+}
+
+func getRows(stubPointer *shim.ChaincodeStubInterface, tableName string, columnKeys []shim.Column) ([]*shim.Row, error) {
+	stub := *stubPointer
+
+	var rowChannel <-chan shim.Row
+
+	rowChannel, err := stub.GetRows(tableName, columnKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	var rows []*shim.Row
+	for {
+		select {
+		case row, ok := <-rowChannel:
+			if !ok {
+				rowChannel = nil
+			} else {
+				rows = append(rows, &row)
+			}
+		}
+		if rowChannel == nil {
+			break
+		}
+	}
+	return rows, nil
+
+}
+
 func isProvider(callerDetails CallerDetails) bool {
 	if strings.EqualFold(callerDetails.role, ROLE_PROVIDER) {
 		return true
@@ -92,78 +128,22 @@ func isProvider(callerDetails CallerDetails) bool {
 	return false
 }
 
-func generateKeyBytes() ([]byte, error) {
-	key := make([]byte, 32)
-
-	_, err := rand.Read(key)
-	if err != nil {
-		return nil, fmt.Errorf("Error generating random bytes', [%v]", err)
-	}
-	return key, nil
-
-}
-
 func encodeBase64(bytes []byte) string {
 	return base64.URLEncoding.EncodeToString(bytes)
 }
-func decodeBase64(val string) []byte {
+func decodeBase64(val string) ([]byte, error) {
 	return base64.URLEncoding.DecodeString(val)
 }
 
-func encryptAES(src []byte, key []byte) ([]byte, error) {
-
-	iv, err := generateKeyBytes()
-	dst := make([]byte, len(src))
-	if err != nil {
-		return nil, err
-	}
-	aesBlockEncrypter, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	aesEncrypter := cipher.NewCFBEncrypter(aesBlockEncrypter, iv)
-	aesEncrypter.XORKeyStream(dst, src)
-
-	//Append Initializing Vector to encrypted bytes
-	dst = append(dst, iv...)
-
-	return dst, nil
-}
-
-func encryptRSA(src []byte, pemKeyBytes []byte) ([]byte, error) {
+func validatePublicKey(pemKeyBytes []byte) error {
 
 	block, _ := pem.Decode(pemKeyBytes)
 
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse RSA public key: [%v]", err)
+	if block != nil {
+		return fmt.Errorf("Failed Decoding PEM public key")
 	}
 
-	rsaPub, ok := pub.(*rsa.PublicKey)
-
-	if !ok {
-		return nil, fmt.Errorf("Value returned from ParsePKIXPublicKey was not an RSA public key")
-
-	}
-	rng := rand.Reader
-	label, _ := generateKeyBytes()
-	cipherValue, err := rsa.EncryptOAEP(sha256.New(), rng, rsaPub, src, label)
-	if err != nil {
-		return nil, fmt.Errorf("Error from encryption: [%v]", err)
-	}
-	return cipherValue, nil
-}
-
-func validatePublicKey(pemPbBytes []byte) error {
-
-	block, err := pem.Decode(pemKeyBytes)
-
-	if err != nil {
-		return fmt.Errorf("Failed Decoding PEM public key: [%v]", err)
-	}
-
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	_, err := x509.ParsePKIXPublicKey(block.Bytes)
 
 	if err != nil {
 		return fmt.Errorf("Failed to parse RSA public key: [%v]", err)
