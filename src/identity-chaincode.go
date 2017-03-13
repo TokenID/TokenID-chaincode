@@ -171,7 +171,7 @@ func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args 
 		return nil, fmt.Errorf("Failed to broadcast enrollment event, [%v] -> "+providerEnrollmentID, err)
 	}
 
-	return []bytes("Enrollment Successful"), nil
+	return []byte("Enrollment Successful"), nil
 }
 
 //=================================================================================================================================
@@ -291,9 +291,18 @@ func (t *IdentityChainCode) Query(stub shim.ChaincodeStubInterface, function str
 	fmt.Println("query is running " + function)
 
 	// Handle different functions
-	if function == "dummy_query" { //read a variable
-		fmt.Println("hi there " + function) //error
-		return nil, nil
+	if function == "getIdentities" { //read a variable
+		return t.GetIdentities(stub, args)
+
+	}
+
+	if function == "getIdentity" { //read a variable
+		return t.GetIdentity(stub, args)
+	}
+
+	if function == "getPublicKey" { //read a variable
+		return t.GetPublicKey(stub, args)
+
 	}
 	fmt.Println("query did not find func: " + function) //error
 	return nil, errors.New("Received unknown function query: " + function)
@@ -532,7 +541,12 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 
 }
 
-func (t *IdentityChainCode) getIdentities(stub shim.ChaincodeStubInterface, enrollmentID string) ([]byte, error) {
+func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	if len(args) < 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID]")
+	}
+	enrollmentID := args[0]
 
 	//Check if user is provider
 	callerDetails, err := readCallerDetails(&stub)
@@ -584,7 +598,13 @@ func (t *IdentityChainCode) getIdentities(stub shim.ChaincodeStubInterface, enro
 
 }
 
-func (t *IdentityChainCode) getIdentity(stub shim.ChaincodeStubInterface, enrollmentID string, identityCode string) ([]byte, error) {
+func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	if len(args) < 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID, identityCode]")
+	}
+	enrollmentID := args[0]
+	identityCode := args[1]
 
 	//Check if user is provider
 	callerDetails, err := readCallerDetails(&stub)
@@ -637,7 +657,13 @@ func (t *IdentityChainCode) getIdentity(stub shim.ChaincodeStubInterface, enroll
 
 }
 
-func (t *IdentityChainCode) getPublicKey(stub shim.ChaincodeStubInterface, enrollmentID string) ([]byte, error) {
+func (t *IdentityChainCode) GetPublicKey(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	if len(args) < 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID]")
+	}
+	enrollmentID := args[0]
+
 	//Verify that Enrollment ID and Pubic key is not null
 	if enrollmentID == "" {
 		return nil, errors.New("Provider Enrollment ID  required")
