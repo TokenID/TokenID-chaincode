@@ -115,8 +115,10 @@ func (t *IdentityChainCode) Init(stub shim.ChaincodeStubInterface, function stri
 		return nil, errors.New("Incorrect number of arguments. Expecting 0")
 	}
 	//Create initial issuer tables
+	fmt.Println("Initializing Issuers Table")
 	err := t.createIssuerTable(stub)
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 
 	}
