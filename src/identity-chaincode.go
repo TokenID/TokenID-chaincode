@@ -262,7 +262,7 @@ func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, args []
 		return nil, fmt.Errorf("Failed to broadcast issuer enrollment event, [%v] -> "+issuerID, err)
 	}
 
-	return nil, nil
+	return []byte("Issuer successfully added -> " + issuerID) , nil
 }
 
 //=================================================================================================================================
@@ -279,24 +279,22 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 	// Handle different functions
 	if function == "init" { //initialize the chaincode state, used as reset
 		bytes, err = t.Init(stub, "init", args)
-	}
-	if function == "initIssuer" {
+	} else if function == "initIssuer" {
 		bytes, err = t.InitIssuer(stub, args)
-	}
-
-	if function == "initIdentity" {
+	} else if function == "initIdentity" {
 		bytes, err = t.InitIdentity(stub, args)
-	}
-	if function == "addIdentity" {
+	} else if function == "addIdentity" {
 		bytes, err = t.AddIdentity(stub, args)
+	} else{
+		fmt.Println("invoke did not find func: " + function) //error
+
+		return nil, errors.New("Received unknown function invocation: " + function)
 	}
 	if err != nil {
 		fmt.Println(err)
-		return bytes, err
 	}
-	fmt.Println("invoke did not find func: " + function) //error
-
-	return nil, errors.New("Received unknown function invocation: " + function)
+	return bytes, err
+	
 }
 
 //=================================================================================================================================
