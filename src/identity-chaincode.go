@@ -674,9 +674,9 @@ func (t *IdentityChainCode) GetIssuers(stub shim.ChaincodeStubInterface, args []
 		return nil, fmt.Errorf("Error Getting Issuers, [%v]", err)
 
 	}
-	fmt.Println(jsonRp)
+	fmt.Println(string(jsonRp))
 
-	return []byte(jsonRp), nil
+	return jsonRp, nil
 
 }
 
@@ -734,8 +734,9 @@ func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args [
 		return nil, fmt.Errorf("Error Getting Identity, [%v]", err)
 
 	}
+	fmt.Println(string(jsonRp))
 
-	return []byte(jsonRp), nil
+	return jsonRp, nil
 
 }
 
