@@ -98,20 +98,27 @@ func main() {
 }
 
 //=================================================================================================================================
+//	 Ping Function
+//=================================================================================================================================
+//	 Pings the peer to keep the connection alive
+//=================================================================================================================================
+func (t *IdentityChainCode) ping(stub shim.ChaincodeStubInterface) ([]byte, error) {
+	return []byte("Hi, I'm up!"), nil
+}
+
+
+//=================================================================================================================================
 //Initializes chaincode when deployed
 //=================================================================================================================================
 func (t *IdentityChainCode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	if len(args) != 0 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 0")
 	}
+	//Create initial issuer tables
+	err := t.createIssuerTable(stub)
+	if err != nil {
+		return nil, err
 
-	if function == "initCreateStates" {
-
-		//Create initial issuer tables
-		err := t.createIssuerTable(stub)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return nil, nil
