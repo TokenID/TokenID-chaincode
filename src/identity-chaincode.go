@@ -274,6 +274,8 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 	var bytes []byte
 	var err error
 
+	fmt.Println("function -> " + function)
+
 	// Handle different functions
 	if function == "init" { //initialize the chaincode state, used as reset
 		bytes, err = t.Init(stub, "init", args)
@@ -289,7 +291,7 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 		bytes, err = t.AddIdentity(stub, args)
 	}
 	if err != nil {
-		logger.Debug(err)
+		fmt.Println(err)
 		return bytes, err
 	}
 	fmt.Println("invoke did not find func: " + function) //error
