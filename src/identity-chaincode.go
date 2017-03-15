@@ -106,7 +106,6 @@ func (t *IdentityChainCode) Ping(stub shim.ChaincodeStubInterface) ([]byte, erro
 	return []byte("Hi, I'm up!"), nil
 }
 
-
 //=================================================================================================================================
 //Initializes chaincode when deployed
 //=================================================================================================================================
@@ -272,19 +271,26 @@ func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, args []
 func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	fmt.Println("invoke is running " + function)
 
+	var bytes []byte
+	var err error
+
 	// Handle different functions
 	if function == "init" { //initialize the chaincode state, used as reset
-		return t.Init(stub, "init", args)
+		bytes, err = t.Init(stub, "init", args)
 	}
 	if function == "initIssuer" {
-		return t.InitIssuer(stub, args)
+		bytes, err = t.InitIssuer(stub, args)
 	}
 
 	if function == "initIdentity" {
-		return t.InitIdentity(stub, args)
+		bytes, err = t.InitIdentity(stub, args)
 	}
 	if function == "addIdentity" {
-		return t.AddIdentity(stub, args)
+		bytes, err = t.AddIdentity(stub, args)
+	}
+	if err != nil {
+		logger.Debug(err)
+		return bytes, err
 	}
 	fmt.Println("invoke did not find func: " + function) //error
 
@@ -298,21 +304,21 @@ func (t *IdentityChainCode) Query(stub shim.ChaincodeStubInterface, function str
 	fmt.Println("query is running " + function)
 
 	// Handle different functions
-	
-	if function == "ping" { 
+
+	if function == "ping" {
 		return t.Ping(stub)
 
 	}
-	if function == "getIdentities" { 
+	if function == "getIdentities" {
 		return t.GetIdentities(stub, args)
 
 	}
 
-	if function == "getIdentity" { 
+	if function == "getIdentity" {
 		return t.GetIdentity(stub, args)
 	}
 
-	if function == "getPublicKey" { 
+	if function == "getPublicKey" {
 		return t.GetPublicKey(stub, args)
 
 	}
