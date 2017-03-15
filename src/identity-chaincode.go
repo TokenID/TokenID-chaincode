@@ -102,7 +102,7 @@ func main() {
 //=================================================================================================================================
 //	 Pings the peer to keep the connection alive
 //=================================================================================================================================
-func (t *IdentityChainCode) ping(stub shim.ChaincodeStubInterface) ([]byte, error) {
+func (t *IdentityChainCode) Ping(stub shim.ChaincodeStubInterface) ([]byte, error) {
 	return []byte("Hi, I'm up!"), nil
 }
 
@@ -298,16 +298,21 @@ func (t *IdentityChainCode) Query(stub shim.ChaincodeStubInterface, function str
 	fmt.Println("query is running " + function)
 
 	// Handle different functions
-	if function == "getIdentities" { //read a variable
+	
+	if function == "ping" { 
+		return t.Ping(stub)
+
+	}
+	if function == "getIdentities" { 
 		return t.GetIdentities(stub, args)
 
 	}
 
-	if function == "getIdentity" { //read a variable
+	if function == "getIdentity" { 
 		return t.GetIdentity(stub, args)
 	}
 
-	if function == "getPublicKey" { //read a variable
+	if function == "getPublicKey" { 
 		return t.GetPublicKey(stub, args)
 
 	}
