@@ -30,45 +30,45 @@ type IdentityChainCode struct {
 }
 
 type Identity struct {
-	providerEnrollmentID     string `json:"providerEnrollmentID"`     //Mundane identity ID - Identity Provider given
-	identityCode             string `json:"identityCode"`             //Issuer given identity ID
-	identityTypeCode         string `json:"identityTypeCode"`         //Virtual Identity Type Code (Issuer defined) - gotten from TCert
-	issuerCode               string `json:"issuerCode"`               //Virtual Identity Issuer Code - gotten from TCert
-	issuerOrganization       string `json:"issuerOrganization"`       //Virtual Identity Issuer Organization - gotten from TCert or Ecert
-	encryptedPayload         string `json:"encryptedPayload"`         // Encrypted Virtual Identity (EVI) payload
-	encryptedKey             string `json:"encryptedKey"`             //Symmetric encryption key for EVI payload encrypted with the public key
-	metaData                 string `json:"metaData"`                 //Miscellanous Identity Information - ONLY NON-SENSITIVE IDENTITY INFORMATION/ATTRIBUTES SHOULD BE ADDED
-	encryptedAttachmentURI   string `json:"encryptedAttachmentURI"`   //Encrypted URIs to Virtual Identity Document e.g. Scanned document image
-	createdBy                string `json:"createdBy"`                //Identity Creator
-	createdOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`     //Created on Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
-	lastUpdatedBy            string `json:"lastUpdatedBy"`            //Last Updated By
-	lastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"` //Last Updated On Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
-	issuerVerified           bool   `json:"issuerVerified"`           //Identity verified by Issuer
+	ProviderEnrollmentID     string `json:"providerEnrollmentID"`     //Mundane identity ID - Identity Provider given
+	IdentityCode             string `json:"identityCode"`             //Issuer given identity ID
+	IdentityTypeCode         string `json:"identityTypeCode"`         //Virtual Identity Type Code (Issuer defined) - gotten from TCert
+	IssuerCode               string `json:"issuerCode"`               //Virtual Identity Issuer Code - gotten from TCert
+	IssuerOrganization       string `json:"issuerOrganization"`       //Virtual Identity Issuer Organization - gotten from TCert or Ecert
+	EncryptedPayload         string `json:"encryptedPayload"`         // Encrypted Virtual Identity (EVI) payload
+	EncryptedKey             string `json:"encryptedKey"`             //Symmetric encryption key for EVI payload encrypted with the public key
+	MetaData                 string `json:"metaData"`                 //Miscellanous Identity Information - ONLY NON-SENSITIVE IDENTITY INFORMATION/ATTRIBUTES SHOULD BE ADDED
+	EncryptedAttachmentURI   string `json:"encryptedAttachmentURI"`   //Encrypted URIs to Virtual Identity Document e.g. Scanned document image
+	CreatedBy                string `json:"createdBy"`                //Identity Creator
+	CreatedOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`     //Created on Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
+	LastUpdatedBy            string `json:"lastUpdatedBy"`            //Last Updated By
+	LastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"` //Last Updated On Timestamp -   which is currently taken from the peer receiving the transaction. Note that this timestamp may not be the same with the other peers' time.
+	IssuerVerified           bool   `json:"issuerVerified"`           //Identity verified by Issuer
 }
 
 type IdentityMin struct {
-	providerEnrollmentID     string `json:"providerEnrollmentID"`
-	identityCode             string `json:"identityCode"`
-	identityTypeCode         string `json:"identityTypeCode"`
-	issuerCode               string `json:"issuerCode"`
-	issuerOrganization       string `json:"issuerOrganization"`
-	createdBy                string `json:"createdBy"`
-	createdOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
-	lastUpdatedBy            string `json:"lastUpdatedBy"`
-	lastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
-	issuerVerified           bool   `json:"issuerVerified"`
+	ProviderEnrollmentID     string `json:"providerEnrollmentID"`
+	IdentityCode             string `json:"identityCode"`
+	IdentityTypeCode         string `json:"identityTypeCode"`
+	IssuerCode               string `json:"issuerCode"`
+	IssuerOrganization       string `json:"issuerOrganization"`
+	CreatedBy                string `json:"createdBy"`
+	CreatedOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
+	LastUpdatedBy            string `json:"lastUpdatedBy"`
+	LastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
+	IssuerVerified           bool   `json:"issuerVerified"`
 }
 
 type Issuer struct {
-	issuerUser               string `json:"issuerUser"`
-	issuerID                 string `json:"issuerID"`
-	issuerIdentityTypeCodes  string `json:"issuerIdentityTypeCodes"`
-	issuerCode               string `json:"issuerCode"`
-	issuerOrganization       string `json:"issuerOrganization"`
-	createdBy                string `json:"createdBy"`
-	createdOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
-	lastUpdatedBy            string `json:"lastUpdatedBy"`
-	lastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
+	IssuerUser               string `json:"issuerUser"`
+	IssuerID                 string `json:"issuerID"`
+	IssuerIdentityTypeCodes  string `json:"issuerIdentityTypeCodes"`
+	IssuerCode               string `json:"issuerCode"`
+	IssuerOrganization       string `json:"issuerOrganization"`
+	CreatedBy                string `json:"createdBy"`
+	CreatedOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
+	LastUpdatedBy            string `json:"lastUpdatedBy"`
+	LastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
 }
 
 //States key prefixes
@@ -600,16 +600,16 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 	for _, rowPointer := range rowPointers {
 		row := *rowPointer
 		var identity = IdentityMin{}
-		identity.providerEnrollmentID = enrollmentID
-		identity.identityCode = row.Columns[1].GetString_()
-		identity.identityTypeCode = row.Columns[2].GetString_()
-		identity.issuerCode = row.Columns[4].GetString_()
-		identity.issuerOrganization = row.Columns[5].GetString_()
-		identity.createdBy = row.Columns[10].GetString_()
-		identity.createdOnTxTimestamp = row.Columns[11].GetInt64()
-		identity.lastUpdatedBy = row.Columns[12].GetString_()
-		identity.lastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
-		identity.issuerVerified = row.Columns[8].GetBool()
+		identity.ProviderEnrollmentID = enrollmentID
+		identity.IdentityCode = row.Columns[1].GetString_()
+		identity.IdentityTypeCode = row.Columns[2].GetString_()
+		identity.IssuerCode = row.Columns[4].GetString_()
+		identity.IssuerOrganization = row.Columns[5].GetString_()
+		identity.CreatedBy = row.Columns[10].GetString_()
+		identity.CreatedOnTxTimestamp = row.Columns[11].GetInt64()
+		identity.LastUpdatedBy = row.Columns[12].GetString_()
+		identity.LastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
+		identity.IssuerVerified = row.Columns[8].GetBool()
 
 		identities = append(identities, identity)
 
@@ -656,15 +656,15 @@ func (t *IdentityChainCode) GetIssuers(stub shim.ChaincodeStubInterface, args []
 	for _, rowPointer := range rowPointers {
 		row := *rowPointer
 		var issuer = Issuer{}
-		issuer.issuerUser = row.Columns[0].GetString_()
-		issuer.issuerID = row.Columns[1].GetString_()
-		issuer.issuerCode = row.Columns[2].GetString_()
-		issuer.issuerOrganization = row.Columns[3].GetString_()
-		issuer.issuerIdentityTypeCodes = row.Columns[4].GetString_()
-		issuer.createdBy = row.Columns[5].GetString_()
-		issuer.createdOnTxTimestamp = row.Columns[6].GetInt64()
-		issuer.lastUpdatedBy = row.Columns[7].GetString_()
-		issuer.lastUpdatedOnTxTimestamp = row.Columns[8].GetInt64()
+		issuer.IssuerUser = row.Columns[0].GetString_()
+		issuer.IssuerID = row.Columns[1].GetString_()
+		issuer.IssuerCode = row.Columns[2].GetString_()
+		issuer.IssuerOrganization = row.Columns[3].GetString_()
+		issuer.IssuerIdentityTypeCodes = row.Columns[4].GetString_()
+		issuer.CreatedBy = row.Columns[5].GetString_()
+		issuer.CreatedOnTxTimestamp = row.Columns[6].GetInt64()
+		issuer.LastUpdatedBy = row.Columns[7].GetString_()
+		issuer.LastUpdatedOnTxTimestamp = row.Columns[8].GetInt64()
 
 		issuers = append(issuers, issuer)
 
@@ -715,20 +715,20 @@ func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args [
 
 	row := *rowPointers[0]
 	var identity = Identity{}
-	identity.providerEnrollmentID = enrollmentID
-	identity.identityCode = row.Columns[1].GetString_()
-	identity.identityTypeCode = row.Columns[2].GetString_()
-	identity.encryptedPayload = row.Columns[3].GetString_()
-	identity.issuerCode = row.Columns[4].GetString_()
-	identity.issuerOrganization = row.Columns[5].GetString_()
-	identity.encryptedKey = row.Columns[6].GetString_()
-	identity.metaData = row.Columns[7].GetString_()
-	identity.issuerVerified = row.Columns[8].GetBool()
-	identity.encryptedAttachmentURI = row.Columns[9].GetString_()
-	identity.createdBy = row.Columns[10].GetString_()
-	identity.createdOnTxTimestamp = row.Columns[11].GetInt64()
-	identity.lastUpdatedBy = row.Columns[12].GetString_()
-	identity.lastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
+	identity.ProviderEnrollmentID = enrollmentID
+	identity.IdentityCode = row.Columns[1].GetString_()
+	identity.IdentityTypeCode = row.Columns[2].GetString_()
+	identity.EncryptedPayload = row.Columns[3].GetString_()
+	identity.IssuerCode = row.Columns[4].GetString_()
+	identity.IssuerOrganization = row.Columns[5].GetString_()
+	identity.EncryptedKey = row.Columns[6].GetString_()
+	identity.MetaData = row.Columns[7].GetString_()
+	identity.IssuerVerified = row.Columns[8].GetBool()
+	identity.EncryptedAttachmentURI = row.Columns[9].GetString_()
+	identity.CreatedBy = row.Columns[10].GetString_()
+	identity.CreatedOnTxTimestamp = row.Columns[11].GetInt64()
+	identity.LastUpdatedBy = row.Columns[12].GetString_()
+	identity.LastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
 
 	jsonRp, err := json.Marshal(identity)
 
