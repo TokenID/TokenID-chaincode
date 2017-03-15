@@ -674,6 +674,7 @@ func (t *IdentityChainCode) GetIssuers(stub shim.ChaincodeStubInterface, args []
 		return nil, fmt.Errorf("Error Getting Issuers, [%v]", err)
 
 	}
+	fmt.Println(jsonRp)
 
 	return []byte(jsonRp), nil
 
