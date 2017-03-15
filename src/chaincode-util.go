@@ -89,7 +89,7 @@ func recordExistsInTable(stubPointer *shim.ChaincodeStubInterface, tableName str
 	if err != nil {
 		return false, err
 	}
-	return len(rowChannel) >= 0, nil
+	return len(rowChannel) > 0, nil
 
 }
 
