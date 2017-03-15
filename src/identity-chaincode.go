@@ -60,6 +60,7 @@ type IdentityMin struct {
 }
 
 type Issuer struct {
+	issuerUser               string `json:"issuerUser"`
 	issuerID                 string `json:"issuerID"`
 	issuerIdentityTypeCodes  string `json:"issuerIdentityTypeCodes"`
 	issuerCode               string `json:"issuerCode"`
@@ -262,7 +263,7 @@ func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, args []
 		return nil, fmt.Errorf("Failed to broadcast issuer enrollment event, [%v] -> "+issuerID, err)
 	}
 
-	return []byte("Issuer successfully added -> " + issuerID) , nil
+	return []byte("Issuer successfully added -> " + issuerID), nil
 }
 
 //=================================================================================================================================
@@ -285,7 +286,7 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 		bytes, err = t.InitIdentity(stub, args)
 	} else if function == "addIdentity" {
 		bytes, err = t.AddIdentity(stub, args)
-	} else{
+	} else {
 		fmt.Println("invoke did not find func: " + function) //error
 
 		return nil, errors.New("Received unknown function invocation: " + function)
@@ -294,7 +295,7 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 		fmt.Println(err)
 	}
 	return bytes, err
-	
+
 }
 
 //=================================================================================================================================
@@ -305,25 +306,32 @@ func (t *IdentityChainCode) Query(stub shim.ChaincodeStubInterface, function str
 
 	// Handle different functions
 
+	var bytes []byte
+	var err error
+
+	fmt.Println("function -> " + function)
 	if function == "ping" {
-		return t.Ping(stub)
+		bytes, err = t.Ping(stub)
 
+	} else if function == "getIdentities" {
+		bytes, err = t.GetIdentities(stub, args)
+
+	} else if function == "getIssuers" {
+		bytes, err = t.GetIssuers(stub, args)
+
+	} else if function == "getIdentity" {
+		bytes, err = t.GetIdentity(stub, args)
+	} else if function == "getPublicKey" {
+		bytes, err = t.GetPublicKey(stub, args)
+	} else {
+		fmt.Println("query did not find func: " + function) //error
+		return nil, errors.New("Received unknown function query: " + function)
 	}
-	if function == "getIdentities" {
-		return t.GetIdentities(stub, args)
-
+	if err != nil {
+		fmt.Println(err)
 	}
+	return bytes, err
 
-	if function == "getIdentity" {
-		return t.GetIdentity(stub, args)
-	}
-
-	if function == "getPublicKey" {
-		return t.GetPublicKey(stub, args)
-
-	}
-	fmt.Println("query did not find func: " + function) //error
-	return nil, errors.New("Received unknown function query: " + function)
 }
 
 //=================================================================================================================================
@@ -609,6 +617,61 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 
 	if err != nil {
 		return nil, fmt.Errorf("Error Getting Identiites, [%v]", err)
+
+	}
+
+	return []byte(jsonRp), nil
+
+}
+
+func (t *IdentityChainCode) GetIssuers(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	if len(args) != 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting none (0)")
+	}
+
+	//Check if user is provider
+	callerDetails, err := readCallerDetails(&stub)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
+	}
+
+	isProv := isProvider(callerDetails)
+	var columns []shim.Column = []shim.Column{}
+
+	if isProv == false {
+		keyCol1 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
+		columns = append(columns, keyCol1)
+	}
+
+	tableName := ISSUER_TBL_NAME
+	rowPointers, err := getRows(&stub, tableName, columns)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Issuers, [%v]", err)
+	}
+	var issuers []Issuer
+	for _, rowPointer := range rowPointers {
+		row := *rowPointer
+		var issuer = Issuer{}
+		issuer.issuerUser = row.Columns[0].GetString_()
+		issuer.issuerID = row.Columns[1].GetString_()
+		issuer.issuerCode = row.Columns[2].GetString_()
+		issuer.issuerOrganization = row.Columns[3].GetString_()
+		issuer.issuerIdentityTypeCodes = row.Columns[4].GetString_()
+		issuer.createdBy = row.Columns[5].GetString_()
+		issuer.createdOnTxTimestamp = row.Columns[6].GetInt64()
+		issuer.lastUpdatedBy = row.Columns[7].GetString_()
+		issuer.lastUpdatedOnTxTimestamp = row.Columns[8].GetInt64()
+
+		issuers = append(issuers, issuer)
+
+	}
+
+	jsonRp, err := json.Marshal(issuers)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Issuers, [%v]", err)
 
 	}
 
