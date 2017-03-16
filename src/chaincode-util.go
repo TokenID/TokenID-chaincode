@@ -129,10 +129,10 @@ func isProvider(callerDetails CallerDetails) bool {
 }
 
 func encodeBase64(bytes []byte) string {
-	return base64.URLEncoding.EncodeToString(bytes)
+	return base64.StdEncoding.EncodeToString(bytes)
 }
 func decodeBase64(val string) ([]byte, error) {
-	return base64.URLEncoding.DecodeString(val)
+	return base64.StdEncoding.DecodeString(val)
 }
 
 func validatePublicKey(pemKeyBytes []byte) error {
