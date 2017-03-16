@@ -140,7 +140,7 @@ func validatePublicKey(pemKeyBytes []byte) error {
 	block, _:= pem.Decode(pemKeyBytes)
 
 	if block == nil {
-		return fmt.Errorf("Failed Decoding PEM public key [%v]", e)
+		return fmt.Errorf("Failed Decoding PEM public key")
 	}
 
 	_, err := x509.ParsePKIXPublicKey(block.Bytes)
