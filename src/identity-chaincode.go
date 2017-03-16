@@ -626,6 +626,7 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 		return nil, fmt.Errorf("Error Getting Identities, [%v]", err)
 
 	}
+	fmt.Println(string(jsonRp))
 
 	return jsonRp, nil
 
