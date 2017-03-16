@@ -137,10 +137,10 @@ func decodeBase64(val string) ([]byte, error) {
 
 func validatePublicKey(pemKeyBytes []byte) error {
 
-	block, _ := pem.Decode(pemKeyBytes)
+	block, e := pem.Decode(pemKeyBytes)
 
-	if block != nil {
-		return fmt.Errorf("Failed Decoding PEM public key")
+	if e != nil {
+		return fmt.Errorf("Failed Decoding PEM public key [%v]", e)
 	}
 
 	_, err := x509.ParsePKIXPublicKey(block.Bytes)
