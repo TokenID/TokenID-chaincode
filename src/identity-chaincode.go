@@ -475,7 +475,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	identityTypeCodeExists := false
 
 	for i := 0; i < len(identityTypeCodes); i++ {
-		if strings.EqualFold(strings.TrimSpace(identityTypeCodes[i]), issuerCode) {
+		if strings.EqualFold(strings.TrimSpace(identityTypeCodes[i]), identityTypeCode) {
 			identityTypeCodeExists = true
 		}
 	}
