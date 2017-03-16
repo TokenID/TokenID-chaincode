@@ -464,7 +464,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	issuerCode = row.Columns[2].GetString_()
 	issuerOrganization = row.Columns[3].GetString_()
 
-	if strings.EqualFold(callerDetails.issuerCode, issuerCode) == false {
+	if isProvider == false && strings.EqualFold(callerDetails.issuerCode, issuerCode) == false {
 		return nil, errors.New("Issuer code (Certificate and Store) don't match -> " + issuerID)
 	}
 
@@ -498,7 +498,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 		return nil, fmt.Errorf("Bad Encrypted Key [%v] ", err)
 	}
 
-	//Encrypted Payload
+	//Encrypted Attachment
 	encryptedAttachmentURIString := identityParams[7]
 	var encryptedAttachmentURI []byte
 	if encryptedAttachmentURIString != "" {
