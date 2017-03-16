@@ -353,7 +353,7 @@ func (t *IdentityChainCode) createIdentityTable(stub shim.ChaincodeStubInterface
 		&shim.ColumnDefinition{Name: "ProviderEnrollmentID", Type: shim.ColumnDefinition_STRING, Key: false},
 		&shim.ColumnDefinition{Name: "IdentityCode", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "IdentityTypeCode", Type: shim.ColumnDefinition_STRING, Key: true},
-		&shim.ColumnDefinition{Name: "EncryptedPayload", Type: shim.ColumnDefinition_STRING, Key: false},
+		&shim.ColumnDefinition{Name: "EncryptedPayload", Type: shim.ColumnDefinition_BYTES, Key: false},
 		&shim.ColumnDefinition{Name: "IssuerCode", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "IssuerOrganization", Type: shim.ColumnDefinition_STRING, Key: false},
 		&shim.ColumnDefinition{Name: "EncryptedKey", Type: shim.ColumnDefinition_BYTES, Key: false},
@@ -605,7 +605,6 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 	tableName := enrollmentID + IDENTITY_TBL_PREFIX
 	rowPointers, err := getRows(&stub, tableName, columns)
 
-	fmt.Println(rowPointers)
 
 	if err != nil {
 		return nil, fmt.Errorf("Error Getting Identities, [%v]", err)
@@ -628,7 +627,6 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 		identities = append(identities, identity)
 
 	}
-	fmt.Println(identities)
 
 	jsonRp, err := json.Marshal(identities)
 
