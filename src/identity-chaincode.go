@@ -518,10 +518,13 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	key2columns = append(key2columns, key2Col1, key2Col2, key2Col3)
 
 	tableName := providerEnrollmentID + IDENTITY_TBL_PREFIX
+	
+	exists, err := recordExistsInTable(&stub, tableName, key2columns)
+	if err != nil {
+		return nil, fmt.Errorf("Error checking for existing identity, [%v]", err)
+	}
 
-	identityRow, err := stub.GetRow(tableName, key2columns)
-
-	if err == nil && identityRow.Columns[0].GetString_() != "" {
+	if exists == true {
 		return nil, fmt.Errorf("Identity already exists -> " + identityCode + "|" + identityTypeCode + "|" + issuerCode)
 	}
 	//Get Transaction TimeStamp
