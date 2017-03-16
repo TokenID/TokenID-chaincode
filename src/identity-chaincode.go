@@ -407,7 +407,7 @@ func (t *IdentityChainCode) createIssuerTable(stub shim.ChaincodeStubInterface) 
 func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identityParams []string) ([]byte, error) {
 
 	if len(identityParams) < 8 {
-		return nil, errors.New("Incomplete number of arguments. Expected 6")
+		return nil, errors.New("Incomplete number of arguments. Expected 8 -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI]")
 	}
 
 	callerDetails, err := readCallerDetails(&stub)
@@ -757,7 +757,7 @@ func (t *IdentityChainCode) GetPublicKey(stub shim.ChaincodeStubInterface, args 
 	//Add Public key state
 	existingPKBytes, err := stub.GetState(enrollmentID + PUBLIC_KEY_PREFIX)
 
-	if err == nil {
+	if err != nil {
 		return nil, fmt.Errorf("Public Key for " + enrollmentID + "  does not exist")
 	}
 
