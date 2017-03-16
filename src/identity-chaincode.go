@@ -150,6 +150,7 @@ func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args 
 	if err == nil && existingPKBytes != nil {
 		return nil, fmt.Errorf("Public Key for " + providerEnrollmentID + " already exists ")
 	}
+	fmt.Println(identityPublicKey)
 
 	pkBytes := []byte(identityPublicKey)
 
