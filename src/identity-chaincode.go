@@ -473,6 +473,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	//Check for Identity Type code
 	identityTypeCodes := strings.Split(row.Columns[3].GetString_(), ",")
 	identityTypeCodeExists := false
+	fmt.Println(identityTypeCodes)
 
 	for i := 0; i < len(identityTypeCodes); i++ {
 		if strings.EqualFold(strings.TrimSpace(identityTypeCodes[i]), identityTypeCode) {
