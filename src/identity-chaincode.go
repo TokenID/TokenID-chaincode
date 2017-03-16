@@ -623,11 +623,11 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 	jsonRp, err := json.Marshal(identities)
 
 	if err != nil {
-		return nil, fmt.Errorf("Error Getting Identiites, [%v]", err)
+		return nil, fmt.Errorf("Error Getting Identities, [%v]", err)
 
 	}
 
-	return []byte(jsonRp), nil
+	return jsonRp, nil
 
 }
 
