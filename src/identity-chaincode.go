@@ -503,7 +503,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	encryptedAttachmentURIString := identityParams[7]
 	var encryptedAttachmentURI []byte
 	if encryptedAttachmentURIString != "" {
-		encryptedAttachmentURI, err = decodeBase64(identityParams[3])
+		encryptedAttachmentURI, err = decodeBase64(identityParams[7])
 		if err != nil {
 			return nil, fmt.Errorf("Bad Encrypted AttachmentURI [%v] ", err)
 		}
