@@ -562,6 +562,13 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 			},
 		})
 
+	fmt.Println(err)
+	
+	if err != nil {
+		return nil, fmt.Errorf("Could not get save identity, [%v]", err)
+
+	}
+
 	eventPayload := providerEnrollmentID + "|" + identityCode
 
 	//Broadcast 'New ID Issued'
@@ -601,7 +608,7 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 	fmt.Println(rowPointers)
 
 	if err != nil {
-		return nil, fmt.Errorf("Error Getting Identiites, [%v]", err)
+		return nil, fmt.Errorf("Error Getting Identities, [%v]", err)
 	}
 	var identities []IdentityMin
 	for _, rowPointer := range rowPointers {
