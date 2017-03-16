@@ -598,6 +598,8 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 	tableName := enrollmentID + IDENTITY_TBL_PREFIX
 	rowPointers, err := getRows(&stub, tableName, columns)
 
+	fmt.Println(rowPointers)
+
 	if err != nil {
 		return nil, fmt.Errorf("Error Getting Identiites, [%v]", err)
 	}
@@ -619,6 +621,7 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 		identities = append(identities, identity)
 
 	}
+	fmt.Println(identities)
 
 	jsonRp, err := json.Marshal(identities)
 
