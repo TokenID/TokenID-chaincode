@@ -1,5 +1,5 @@
 /*
-Copyright Victor Ikoro 2017 All Rights Reserved.
+Copyright TokenID 2017 All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ type Identity struct {
 	ProviderEnrollmentID     string `json:"providerEnrollmentID"`     //Mundane identity ID - Identity Provider given
 	IdentityCode             string `json:"identityCode"`             //Issuer given identity ID
 	IdentityTypeCode         string `json:"identityTypeCode"`         //Virtual Identity Type Code (Issuer defined) - gotten from TCert
+	IssuerID                 string `json:"issuerID"`                 //Virtual Identity IssuerID - gotten from TCert
 	IssuerCode               string `json:"issuerCode"`               //Virtual Identity Issuer Code - gotten from TCert
 	IssuerOrganization       string `json:"issuerOrganization"`       //Virtual Identity Issuer Organization - gotten from TCert or Ecert
 	EncryptedPayload         string `json:"encryptedPayload"`         // Encrypted Virtual Identity (EVI) payload
@@ -51,24 +52,13 @@ type IdentityMin struct {
 	IdentityCode             string `json:"identityCode"`
 	IdentityTypeCode         string `json:"identityTypeCode"`
 	IssuerCode               string `json:"issuerCode"`
+	IssuerID                 string `json:"issuerID"`
 	IssuerOrganization       string `json:"issuerOrganization"`
 	CreatedBy                string `json:"createdBy"`
 	CreatedOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
 	LastUpdatedBy            string `json:"lastUpdatedBy"`
 	LastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
 	IssuerVerified           bool   `json:"issuerVerified"`
-}
-
-type Issuer struct {
-	IssuerUser               string `json:"issuerUser"`
-	IssuerID                 string `json:"issuerID"`
-	IssuerIdentityTypeCodes  string `json:"issuerIdentityTypeCodes"`
-	IssuerCode               string `json:"issuerCode"`
-	IssuerOrganization       string `json:"issuerOrganization"`
-	CreatedBy                string `json:"createdBy"`
-	CreatedOnTxTimestamp     int64  `json:"createdOnTxTimestamp"`
-	LastUpdatedBy            string `json:"lastUpdatedBy"`
-	LastUpdatedOnTxTimestamp int64  `json:"lastUpdatedOnTxTimestamp"`
 }
 
 //States key prefixes
@@ -84,7 +74,7 @@ const EVENT_NEW_ISSUER_ENROLLED = "EVENT_NEW_ISSUER_ENROLLED"
 //ROLES
 const ROLE_ISSUER = "Issuer"
 const ROLE_PROVIDER = "Provider"
-const ROLE_RELYING_PARTNER = "RP"
+const ROLE_USER = "User"
 
 var logger = shim.NewLogger("IdentityChaincode")
 
@@ -111,19 +101,16 @@ func (t *IdentityChainCode) Ping(stub shim.ChaincodeStubInterface) ([]byte, erro
 //Initializes chaincode when deployed
 //=================================================================================================================================
 func (t *IdentityChainCode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
-	if len(args) != 0 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 0")
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2 -> [providerEnrollmentID, identityPublicKey]")
 	}
-	//Create initial issuer tables
-	fmt.Println("Initializing Issuers Table")
-	err := t.createIssuerTable(stub)
+	//Create initial identity table
+	fmt.Println("Initializing Identity for ->" + args[0])
+	val, err := t.InitIdentity(stub, args)
 	if err != nil {
 		fmt.Println(err)
-		return nil, err
-
 	}
-
-	return nil, nil
+	return val, err
 }
 
 //=================================================================================================================================
@@ -133,6 +120,16 @@ func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args 
 
 	if len(args) < 2 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 2 -> [providerEnrollmentID , identityPublicKey]")
+	}
+
+	//Check if user is provider
+	callerDetails, err := readCallerDetails(&stub)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
+	}
+	isProv := isProvider(callerDetails)
+	if isProv == false {
+		return nil, errors.New("Access Denied")
 	}
 
 	var providerEnrollmentID, identityPublicKey string
@@ -185,91 +182,6 @@ func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args 
 }
 
 //=================================================================================================================================
-//Initializes new Issuer
-//=================================================================================================================================
-func (t *IdentityChainCode) InitIssuer(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-
-	if len(args) < 5 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 5 -> [issuerEnrollmentUserName , issuerID , issuerCode , issuerOrganization , identityTypeCodes]")
-	}
-
-	var issuerEnrollmentUserName, issuerID, issuerCode, issuerOrganization, identityTypeCodes string
-	issuerEnrollmentUserName = args[0]
-	issuerID = args[1]
-	issuerCode = args[2]
-	issuerOrganization = args[3]
-	identityTypeCodes = args[4]
-
-	//Check if user is provider
-	callerDetails, err := readCallerDetails(&stub)
-	if err != nil {
-		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
-	}
-	isProv := isProvider(callerDetails)
-	if isProv == false {
-		return nil, errors.New("Access Denied")
-	}
-
-	//Verify required fields
-	if issuerEnrollmentUserName == "" || issuerID == "" || issuerCode == "" || issuerOrganization == "" {
-		return nil, errors.New("One or more Mandatory field(s) missing. Mandatory fields include 'issuerEnrollmentUserName', 'issuerID', 'issuerCode', 'issuerOrganization'")
-	}
-
-	//Check for existing issuer
-	var columns []shim.Column
-	//keyCol1 := shim.Column{Value: &shim.Column_String_{String_: issuerEnrollmentUserName}}
-	keyCol2 := shim.Column{Value: &shim.Column_String_{String_: issuerID}}
-	keyCol3 := shim.Column{Value: &shim.Column_String_{String_: issuerCode}}
-	columns = append(columns, keyCol2, keyCol3)
-
-	exists, err := recordExistsInTable(&stub, ISSUER_TBL_NAME, columns)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error checking for existing issuers, [%v]", err)
-	}
-	if exists == true {
-		return nil, errors.New("Issuer ID or Code  already exist -> " + issuerID + "|" + issuerCode)
-	}
-
-	//Get Transaction TimeStamp
-	stampPointer, err := stub.GetTxTimestamp()
-
-	if err != nil {
-		return nil, fmt.Errorf("Could not get Transaction timestamp from peer, [%v]", err)
-
-	}
-	timestamp := *stampPointer
-	//Insert Issuer
-	_, err = stub.InsertRow(
-		ISSUER_TBL_NAME,
-		shim.Row{
-			Columns: []*shim.Column{
-				&shim.Column{Value: &shim.Column_String_{String_: issuerEnrollmentUserName}},
-				&shim.Column{Value: &shim.Column_String_{String_: issuerID}},
-				&shim.Column{Value: &shim.Column_String_{String_: issuerCode}},
-				&shim.Column{Value: &shim.Column_String_{String_: issuerOrganization}},
-				&shim.Column{Value: &shim.Column_String_{String_: identityTypeCodes}},
-				&shim.Column{Value: &shim.Column_String_{String_: callerDetails.user}},
-				&shim.Column{Value: &shim.Column_Int64{Int64: timestamp.Seconds}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-				&shim.Column{Value: &shim.Column_Int64{Int64: 0}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-			},
-		})
-
-	//Broadcast 'New Issuer Enrollment'  Event Issuer ID
-	err = stub.SetEvent(EVENT_NEW_ISSUER_ENROLLED, []byte(issuerID))
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to broadcast issuer enrollment event, [%v] -> "+issuerID, err)
-	}
-
-	return []byte("Issuer successfully added -> " + issuerID), nil
-}
-
-//=================================================================================================================================
 //	 Entry point to invoke a chaincode function
 //=================================================================================================================================
 func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
@@ -283,11 +195,9 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 	// Handle different functions
 	if function == "init" { //initialize the chaincode state, used as reset
 		bytes, err = t.Init(stub, "init", args)
-	} else if function == "initIssuer" {
-		bytes, err = t.InitIssuer(stub, args)
-	} else if function == "initIdentity" {
-		bytes, err = t.InitIdentity(stub, args)
 	} else if function == "addIdentity" {
+		bytes, err = t.AddIdentity(stub, args)
+	} else if function == "deleteIdentity" {
 		bytes, err = t.AddIdentity(stub, args)
 	} else {
 		fmt.Println("invoke did not find func: " + function) //error
@@ -318,9 +228,6 @@ func (t *IdentityChainCode) Query(stub shim.ChaincodeStubInterface, function str
 
 	} else if function == "getIdentities" {
 		bytes, err = t.GetIdentities(stub, args)
-
-	} else if function == "getIssuers" {
-		bytes, err = t.GetIssuers(stub, args)
 
 	} else if function == "getIdentity" {
 		bytes, err = t.GetIdentity(stub, args)
@@ -355,6 +262,7 @@ func (t *IdentityChainCode) createIdentityTable(stub shim.ChaincodeStubInterface
 		&shim.ColumnDefinition{Name: "IdentityTypeCode", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "EncryptedPayload", Type: shim.ColumnDefinition_BYTES, Key: false},
 		&shim.ColumnDefinition{Name: "IssuerCode", Type: shim.ColumnDefinition_STRING, Key: true},
+		&shim.ColumnDefinition{Name: "IssuerID", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "IssuerOrganization", Type: shim.ColumnDefinition_STRING, Key: false},
 		&shim.ColumnDefinition{Name: "EncryptedKey", Type: shim.ColumnDefinition_BYTES, Key: false},
 		&shim.ColumnDefinition{Name: "Metadata", Type: shim.ColumnDefinition_STRING, Key: false},
@@ -364,40 +272,9 @@ func (t *IdentityChainCode) createIdentityTable(stub shim.ChaincodeStubInterface
 		&shim.ColumnDefinition{Name: "CreatedOnTxTimeStamp", Type: shim.ColumnDefinition_INT64, Key: false},
 		&shim.ColumnDefinition{Name: "LastUpdatedBy", Type: shim.ColumnDefinition_STRING, Key: false},
 		&shim.ColumnDefinition{Name: "lastUpdatedOnTxTimeStamp", Type: shim.ColumnDefinition_INT64, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField1", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField2", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField3", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField4", Type: shim.ColumnDefinition_STRING, Key: false},
 	})
 	if tableErr != nil {
 		return fmt.Errorf("Failed creating IdentityTable table, [%v] -> "+enrollmentID, tableErr)
-	}
-	return nil
-}
-
-//=================================================================================================================================
-//	 Create Issuer table
-//=================================================================================================================================
-
-func (t *IdentityChainCode) createIssuerTable(stub shim.ChaincodeStubInterface) error {
-
-	// Create Issuer table
-	tableErr := stub.CreateTable(ISSUER_TBL_NAME, []*shim.ColumnDefinition{
-		&shim.ColumnDefinition{Name: "IssuerUserName", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "IssuerID", Type: shim.ColumnDefinition_STRING, Key: true},
-		&shim.ColumnDefinition{Name: "IssuerCode", Type: shim.ColumnDefinition_STRING, Key: true},
-		&shim.ColumnDefinition{Name: "IssuerOrganization", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "IssuerIdentityTypeCodes", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "CreatedBy", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "CreatedOnTxTimeStamp", Type: shim.ColumnDefinition_INT64, Key: false},
-		&shim.ColumnDefinition{Name: "LastUpdatedBy", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "LastUpdatedOnTxTimeStamp", Type: shim.ColumnDefinition_INT64, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField1", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField2", Type: shim.ColumnDefinition_STRING, Key: false},
-		&shim.ColumnDefinition{Name: "additionalField3", Type: shim.ColumnDefinition_STRING, Key: false},
-	})
-	if tableErr != nil {
-		return fmt.Errorf("Failed creating Issuer table, [%v]", tableErr)
 	}
 	return nil
 }
@@ -407,14 +284,23 @@ func (t *IdentityChainCode) createIssuerTable(stub shim.ChaincodeStubInterface) 
 //=================================================================================================================================
 func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identityParams []string) ([]byte, error) {
 
-	if len(identityParams) < 8 {
-		return nil, errors.New("Incomplete number of arguments. Expected 8 -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI]")
-	}
-
+	//Get Caller Details
 	callerDetails, err := readCallerDetails(&stub)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
 	}
+
+	//Check if Tcert has a valid role
+	validRoles := hasValidRoles(callerDetails)
+
+	if validRoles == false {
+		return nil, fmt.Errorf("Access denied. Unknown role in Tcert -> " + callerDetails.role)
+	}
+
+	if len(identityParams) < 8 {
+		return nil, errors.New("Incomplete number of arguments. Expected 8 -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI]")
+	}
+
 	if strings.EqualFold(callerDetails.role, ROLE_ISSUER) == false && strings.EqualFold(callerDetails.role, ROLE_PROVIDER) == false {
 		return nil, errors.New("Access Denied. Not a provider or Issuer")
 	}
@@ -443,45 +329,25 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 			}
 		}
 		issuerID = callerDetails.issuerID
+		issuerCode = callerDetails.issuerCode
+		issuerOrganization = callerDetails.organization
+		//Verified, since the identtity is created by the issuer
 		issuerVerified = true
 	}
 
-	//Get existing issuer
-	var columns []shim.Column
-	keyCol1 := shim.Column{Value: &shim.Column_String_{String_: issuerID}}
-	columns = append(columns, keyCol1)
-
-	rowPointers, err := getRows(&stub, ISSUER_TBL_NAME, columns)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error checking for existing issuers, [%v]", err)
-	}
-	if len(rowPointers) == 0 {
-		return nil, errors.New("Issuer does not exist -> " + issuerID)
-	}
-	row := *rowPointers[0]
-
-	issuerCode = row.Columns[2].GetString_()
-	issuerOrganization = row.Columns[3].GetString_()
-
-	if isProvider == false && strings.EqualFold(callerDetails.issuerCode, issuerCode) == false {
-		return nil, errors.New("Issuer code (Certificate and Store) don't match -> " + issuerID)
+	if isProvider == false && (issuerCode == "" || issuerID == "" || issuerOrganization == "") {
+		return nil, errors.New("One of the required fields are not available in transaction certificate [issuerCode, issuerID, organization] -> [" + issuerID + ", " + issuerID + "," + issuerOrganization + "]")
 	}
 
+	//Validate Identity Type code
 	identityTypeCode := identityParams[2]
-
-	//Check for Identity Type code
-	identityTypeCodes := strings.Split(row.Columns[4].GetString_(), ",")
-	identityTypeCodeExists := false
-	fmt.Println(identityTypeCodes)
-
-	for i := 0; i < len(identityTypeCodes); i++ {
-		if strings.EqualFold(strings.TrimSpace(identityTypeCodes[i]), identityTypeCode) {
-			identityTypeCodeExists = true
-		}
+	isValid, err := validateIdentityTypeCode(identityTypeCode)
+	if err != nil {
+		fmt.Println(err)
+		return nil, fmt.Errorf("Could not validate identityTypeCode -> [%v]", err)
 	}
-	if !identityTypeCodeExists {
-		return nil, errors.New("IdentityTypeCode does not exist -> " + identityTypeCode)
+	if isValid == false {
+		return nil, fmt.Errorf("Invalid identityTypeCode. Must contain only AlphaNumeric characters, minimum length of 4 and maximum of 10")
 	}
 
 	providerEnrollmentID := identityParams[0]
@@ -513,19 +379,21 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	//Check if similar Identity exists
 	var key2columns []shim.Column
 	key2Col1 := shim.Column{Value: &shim.Column_String_{String_: identityCode}}
-	key2Col2 := shim.Column{Value: &shim.Column_String_{String_: identityTypeCode}}
-	key2Col3 := shim.Column{Value: &shim.Column_String_{String_: issuerCode}}
-	key2columns = append(key2columns, key2Col1, key2Col2, key2Col3)
+	//key2Col2 := shim.Column{Value: &shim.Column_String_{String_: identityTypeCode}}
+	//key2Col3 := shim.Column{Value: &shim.Column_String_{String_: issuerID}}
+	key2columns = append(key2columns, key2Col1)
 
 	tableName := providerEnrollmentID + IDENTITY_TBL_PREFIX
-	
-	exists, err := recordExistsInTable(&stub, tableName, key2columns)
+
+	rows, err := getRows(&stub, tableName, key2columns)
 	if err != nil {
 		return nil, fmt.Errorf("Error checking for existing identity, [%v]", err)
 	}
 
-	if exists == true {
-		return nil, fmt.Errorf("Identity already exists -> " + identityCode + "|" + identityTypeCode + "|" + issuerCode)
+	if len(rows) > 0 {
+		rowPointer := rows[0]
+		row := *rowPointer
+		return nil, fmt.Errorf("Identity already exists -> " + row.Columns[1].GetString_() + "|" + row.Columns[2].GetString_() + "|" + row.Columns[5].GetString_())
 	}
 	//Get Transaction TimeStamp
 	stampPointer, err := stub.GetTxTimestamp()
@@ -546,6 +414,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 				&shim.Column{Value: &shim.Column_String_{String_: identityTypeCode}},
 				&shim.Column{Value: &shim.Column_Bytes{Bytes: encryptedPayload}},
 				&shim.Column{Value: &shim.Column_String_{String_: issuerCode}},
+				&shim.Column{Value: &shim.Column_String_{String_: issuerID}},
 				&shim.Column{Value: &shim.Column_String_{String_: issuerOrganization}},
 				&shim.Column{Value: &shim.Column_Bytes{Bytes: encryptedKey}},
 				&shim.Column{Value: &shim.Column_String_{String_: identityParams[6]}},
@@ -555,15 +424,11 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 				&shim.Column{Value: &shim.Column_Int64{Int64: timestamp.Seconds}},
 				&shim.Column{Value: &shim.Column_String_{String_: ""}},
 				&shim.Column{Value: &shim.Column_Int64{Int64: 0}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
-				&shim.Column{Value: &shim.Column_String_{String_: ""}},
 			},
 		})
 
 	fmt.Println(err)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("Could not get save identity, [%v]", err)
 
@@ -581,30 +446,109 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 
 }
 
-func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+func (t *IdentityChainCode) removeIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 
-	if len(args) < 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID]")
-	}
-	enrollmentID := args[0]
-
-	//Check if user is provider
+	//Get Caller Details
 	callerDetails, err := readCallerDetails(&stub)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
 	}
 
+	//Check if Tcert has a valid role
+	validRoles := hasValidRoles(callerDetails)
+
+	if validRoles == false {
+		return nil, fmt.Errorf("Access denied. Unknown role in Tcert -> " + callerDetails.role)
+	}
+
+	if len(args) < 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID, identityCode]")
+	}
+	enrollmentID := args[0]
+	identityCode := args[1]
+
 	isProv := isProvider(callerDetails)
+	isUser := isUser(callerDetails)
+
+	if isUser == true && callerDetails.userEnrollmentID != args[0] {
+		errmsg := "Access Denied. User Role found in TCert but Enrollment ID on certificate don't match"
+		fmt.Println(errmsg + "->" + callerDetails.userEnrollmentID)
+		return nil, fmt.Errorf(errmsg)
+	}
+
+	var columns []shim.Column = []shim.Column{}
+	keyCol1 := shim.Column{Value: &shim.Column_String_{String_: identityCode}}
+	columns = append(columns, keyCol1)
+
+	if isProv == false && isUser == false {
+		keyCol2 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
+		columns = append(columns, keyCol2)
+	}
+
+	tableName := enrollmentID + IDENTITY_TBL_PREFIX
+	rowPointers, err := getRows(&stub, tableName, columns)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error Getting Identity, [%v]", err)
+	}
+	if len(rowPointers) == 0 {
+		return nil, fmt.Errorf("Identity does not exist")
+	}
+
+	row := *rowPointers[0]
+
+	err = stub.DeleteRow(tableName, []shim.Column{
+		shim.Column{Value: &shim.Column_String_{String_: row.Columns[1].GetString_()}},
+		shim.Column{Value: &shim.Column_String_{String_: row.Columns[2].GetString_()}},
+		shim.Column{Value: &shim.Column_String_{String_: row.Columns[4].GetString_()}},
+		shim.Column{Value: &shim.Column_String_{String_: row.Columns[5].GetString_()}},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("Error deleting Identity, [%v] -> "+enrollmentID+"|"+identityCode, err)
+
+	}
+
+	return []byte("Identity successfully removed"), nil
+
+}
+
+func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	//Get Caller Details
+	callerDetails, err := readCallerDetails(&stub)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
+	}
+
+	//Check if Tcert has a valid role
+	validRoles := hasValidRoles(callerDetails)
+
+	if validRoles == false {
+		return nil, fmt.Errorf("Access denied. Unknown role in Tcert -> " + callerDetails.role)
+	}
+
+	if len(args) < 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID]")
+	}
+	enrollmentID := args[0]
+	isProv := isProvider(callerDetails)
+	isUser := isUser(callerDetails)
+
+	if isUser == true && callerDetails.userEnrollmentID != args[0] {
+		errmsg := "Access Denied. User Role found in TCert but Enrollment ID on certificate don't match"
+		fmt.Println(errmsg + "->" + callerDetails.userEnrollmentID)
+		return nil, fmt.Errorf(errmsg)
+	}
 	var columns []shim.Column = []shim.Column{}
 
-	if isProv == false {
+	if isProv == false && isUser == false { //Its Issuer
 		keyCol1 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
 		columns = append(columns, keyCol1)
 	}
 
 	tableName := enrollmentID + IDENTITY_TBL_PREFIX
 	rowPointers, err := getRows(&stub, tableName, columns)
-
 
 	if err != nil {
 		return nil, fmt.Errorf("Error Getting Identities, [%v]", err)
@@ -617,12 +561,13 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 		identity.IdentityCode = row.Columns[1].GetString_()
 		identity.IdentityTypeCode = row.Columns[2].GetString_()
 		identity.IssuerCode = row.Columns[4].GetString_()
-		identity.IssuerOrganization = row.Columns[5].GetString_()
-		identity.CreatedBy = row.Columns[10].GetString_()
-		identity.CreatedOnTxTimestamp = row.Columns[11].GetInt64()
-		identity.LastUpdatedBy = row.Columns[12].GetString_()
-		identity.LastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
-		identity.IssuerVerified = row.Columns[8].GetBool()
+		identity.IssuerID = row.Columns[5].GetString_()
+		identity.IssuerOrganization = row.Columns[6].GetString_()
+		identity.CreatedBy = row.Columns[11].GetString_()
+		identity.CreatedOnTxTimestamp = row.Columns[12].GetInt64()
+		identity.LastUpdatedBy = row.Columns[13].GetString_()
+		identity.LastUpdatedOnTxTimestamp = row.Columns[14].GetInt64()
+		identity.IssuerVerified = row.Columns[9].GetBool()
 
 		identities = append(identities, identity)
 
@@ -640,63 +585,20 @@ func (t *IdentityChainCode) GetIdentities(stub shim.ChaincodeStubInterface, args
 
 }
 
-func (t *IdentityChainCode) GetIssuers(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 
-	if len(args) != 0 {
-		return nil, errors.New("Incorrect number of arguments. Expecting none (0)")
-	}
-
-	//Check if user is provider
+	//Get Caller Details
 	callerDetails, err := readCallerDetails(&stub)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
 	}
 
-	isProv := isProvider(callerDetails)
-	var columns []shim.Column = []shim.Column{}
+	//Check if Tcert has a valid role
+	validRoles := hasValidRoles(callerDetails)
 
-	if isProv == false {
-		keyCol1 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
-		columns = append(columns, keyCol1)
+	if validRoles == false {
+		return nil, fmt.Errorf("Access denied. Unknown role in Tcert -> " + callerDetails.role)
 	}
-
-	tableName := ISSUER_TBL_NAME
-	rowPointers, err := getRows(&stub, tableName, columns)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error Getting Issuers, [%v]", err)
-	}
-	var issuers []Issuer
-	for _, rowPointer := range rowPointers {
-		row := *rowPointer
-		var issuer = Issuer{}
-		issuer.IssuerUser = row.Columns[0].GetString_()
-		issuer.IssuerID = row.Columns[1].GetString_()
-		issuer.IssuerCode = row.Columns[2].GetString_()
-		issuer.IssuerOrganization = row.Columns[3].GetString_()
-		issuer.IssuerIdentityTypeCodes = row.Columns[4].GetString_()
-		issuer.CreatedBy = row.Columns[5].GetString_()
-		issuer.CreatedOnTxTimestamp = row.Columns[6].GetInt64()
-		issuer.LastUpdatedBy = row.Columns[7].GetString_()
-		issuer.LastUpdatedOnTxTimestamp = row.Columns[8].GetInt64()
-
-		issuers = append(issuers, issuer)
-
-	}
-
-	jsonRp, err := json.Marshal(issuers)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error Getting Issuers, [%v]", err)
-
-	}
-	fmt.Println(string(jsonRp))
-
-	return jsonRp, nil
-
-}
-
-func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 
 	if len(args) < 2 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID, identityCode]")
@@ -704,18 +606,20 @@ func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args [
 	enrollmentID := args[0]
 	identityCode := args[1]
 
-	//Check if user is provider
-	callerDetails, err := readCallerDetails(&stub)
-	if err != nil {
-		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
+	isProv := isProvider(callerDetails)
+	isUser := isUser(callerDetails)
+
+	if isUser == true && callerDetails.userEnrollmentID != args[0] {
+		errmsg := "Access Denied. User Role found in TCert but Enrollment ID on certificate don't match"
+		fmt.Println(errmsg + "->" + callerDetails.userEnrollmentID)
+		return nil, fmt.Errorf(errmsg)
 	}
 
-	isProv := isProvider(callerDetails)
 	var columns []shim.Column = []shim.Column{}
 	keyCol1 := shim.Column{Value: &shim.Column_String_{String_: identityCode}}
 	columns = append(columns, keyCol1)
 
-	if isProv == false {
+	if isProv == false && isUser == false {
 		keyCol2 := shim.Column{Value: &shim.Column_String_{String_: callerDetails.issuerID}}
 		columns = append(columns, keyCol2)
 	}
@@ -734,15 +638,16 @@ func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args [
 	identity.IdentityTypeCode = row.Columns[2].GetString_()
 	identity.EncryptedPayload = encodeBase64(row.Columns[3].GetBytes())
 	identity.IssuerCode = row.Columns[4].GetString_()
-	identity.IssuerOrganization = row.Columns[5].GetString_()
-	identity.EncryptedKey = encodeBase64(row.Columns[6].GetBytes())
-	identity.MetaData = row.Columns[7].GetString_()
-	identity.IssuerVerified = row.Columns[8].GetBool()
-	identity.EncryptedAttachmentURI = encodeBase64(row.Columns[9].GetBytes())
-	identity.CreatedBy = row.Columns[10].GetString_()
-	identity.CreatedOnTxTimestamp = row.Columns[11].GetInt64()
-	identity.LastUpdatedBy = row.Columns[12].GetString_()
-	identity.LastUpdatedOnTxTimestamp = row.Columns[13].GetInt64()
+	identity.IssuerID = row.Columns[5].GetString_()
+	identity.IssuerOrganization = row.Columns[6].GetString_()
+	identity.EncryptedKey = encodeBase64(row.Columns[7].GetBytes())
+	identity.MetaData = row.Columns[8].GetString_()
+	identity.IssuerVerified = row.Columns[9].GetBool()
+	identity.EncryptedAttachmentURI = encodeBase64(row.Columns[10].GetBytes())
+	identity.CreatedBy = row.Columns[11].GetString_()
+	identity.CreatedOnTxTimestamp = row.Columns[12].GetInt64()
+	identity.LastUpdatedBy = row.Columns[13].GetString_()
+	identity.LastUpdatedOnTxTimestamp = row.Columns[14].GetInt64()
 
 	jsonRp, err := json.Marshal(identity)
 
@@ -750,13 +655,25 @@ func (t *IdentityChainCode) GetIdentity(stub shim.ChaincodeStubInterface, args [
 		return nil, fmt.Errorf("Error Getting Identity, [%v]", err)
 
 	}
-	fmt.Println(string(jsonRp))
 
 	return jsonRp, nil
 
 }
 
 func (t *IdentityChainCode) GetPublicKey(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	//Get Caller Details
+	callerDetails, err := readCallerDetails(&stub)
+	if err != nil {
+		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
+	}
+
+	//Check if Tcert has a valid role
+	validRoles := hasValidRoles(callerDetails)
+
+	if validRoles == false {
+		return nil, fmt.Errorf("Access denied. Unknown role in Tcert -> " + callerDetails.role)
+	}
 
 	if len(args) < 1 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1 -> [enrollmentID]")

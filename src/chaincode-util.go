@@ -1,5 +1,5 @@
 /*
-Copyright Victor Ikoro 2017 All Rights Reserved.
+Copyright TokenID 2017 All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,17 +21,19 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
 type CallerDetails struct {
-	user         string
-	role         string
-	issuerCode   string
-	issuerID     string
-	organization string
+	user             string
+	role             string
+	issuerCode       string
+	issuerID         string
+	userEnrollmentID string
+	organization     string
 }
 
 func readCallerDetails(stubPointer *shim.ChaincodeStubInterface) (CallerDetails, error) {
@@ -55,7 +57,6 @@ func readCallerDetails(stubPointer *shim.ChaincodeStubInterface) (CallerDetails,
 	issuerCodeBytes, err := stub.ReadCertAttribute("issuerCode")
 	if err != nil {
 		callerDetails.issuerCode = ""
-		//return callerDetails, fmt.Errorf("Error reading attribute 'issuerCode', [%v]", err)
 	} else {
 		callerDetails.issuerCode = string(issuerCodeBytes)
 	}
@@ -63,7 +64,6 @@ func readCallerDetails(stubPointer *shim.ChaincodeStubInterface) (CallerDetails,
 	issuerIDBytes, err := stub.ReadCertAttribute("issuerID")
 	if err != nil {
 		callerDetails.issuerID = ""
-		//return callerDetails, fmt.Errorf("Error reading attribute 'issuerID', [%v]", err)
 	} else {
 		callerDetails.issuerID = string(issuerIDBytes)
 	}
@@ -71,7 +71,6 @@ func readCallerDetails(stubPointer *shim.ChaincodeStubInterface) (CallerDetails,
 	orgBytes, err := stub.ReadCertAttribute("organization")
 	if err != nil {
 		callerDetails.organization = ""
-		//return callerDetails, fmt.Errorf("Error reading attribute 'organization', [%v]", err)
 	} else {
 		callerDetails.organization = string(orgBytes)
 	}
@@ -128,6 +127,23 @@ func isProvider(callerDetails CallerDetails) bool {
 	return false
 }
 
+func isUser(callerDetails CallerDetails) bool {
+	if strings.EqualFold(callerDetails.role, ROLE_USER) {
+		return true
+	}
+	return false
+}
+
+func isIssuer(callerDetails CallerDetails) bool {
+	if strings.EqualFold(callerDetails.role, ROLE_ISSUER) {
+		return true
+	}
+	return false
+}
+func hasValidRoles(callerDetails CallerDetails) bool {
+	return (isProvider(callerDetails) || isIssuer(callerDetails) || isUser(callerDetails))
+}
+
 func encodeBase64(bytes []byte) string {
 	return base64.StdEncoding.EncodeToString(bytes)
 }
@@ -135,9 +151,13 @@ func decodeBase64(val string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(val)
 }
 
+func validateIdentityTypeCode(code string) (bool, error) {
+	return regexp.MatchString("^[a-zA-Z0-9]{4,10}$", code)
+}
+
 func validatePublicKey(pemKeyBytes []byte) error {
 
-	block, _:= pem.Decode(pemKeyBytes)
+	block, _ := pem.Decode(pemKeyBytes)
 
 	if block == nil {
 		return fmt.Errorf("Failed Decoding PEM public key")
