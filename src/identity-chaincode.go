@@ -197,8 +197,8 @@ func (t *IdentityChainCode) Invoke(stub shim.ChaincodeStubInterface, function st
 		bytes, err = t.Init(stub, "init", args)
 	} else if function == "addIdentity" {
 		bytes, err = t.AddIdentity(stub, args)
-	} else if function == "deleteIdentity" {
-		bytes, err = t.AddIdentity(stub, args)
+	} else if function == "removeIdentity" {
+		bytes, err = t.RemoveIdentity(stub, args)
 	} else {
 		fmt.Println("invoke did not find func: " + function) //error
 
@@ -446,7 +446,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 
 }
 
-func (t *IdentityChainCode) removeIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+func (t *IdentityChainCode) RemoveIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 
 	//Get Caller Details
 	callerDetails, err := readCallerDetails(&stub)
