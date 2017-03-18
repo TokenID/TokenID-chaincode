@@ -438,6 +438,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 
 	//Broadcast 'New ID Issued'
 	err = stub.SetEvent(EVENT_NEW_IDENTITY_ISSUED, []byte(eventPayload))
+	fmt.Println(err)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to setevent EVENT_NEW_IDENTITY_ISSUED, [%v] -> "+eventPayload, err)
