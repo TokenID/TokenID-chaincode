@@ -42,17 +42,21 @@ func readCallerDetails(stubPointer *shim.ChaincodeStubInterface) (CallerDetails,
 	stub := *stubPointer
 	userBytes, err := stub.ReadCertAttribute("username")
 	if err != nil {
-		return callerDetails, fmt.Errorf("Error reading attribute 'user', [%v]", err)
+		fmt.Println("Error reading attribute 'username'")
+		fmt.Println(err)
+		callerDetails.user = ""
+	} else {
+		callerDetails.user = string(userBytes)
 	}
-	callerDetails.user = string(userBytes)
 
 	roleBytes, err := stub.ReadCertAttribute("role")
 	if err != nil {
-		return callerDetails, fmt.Errorf("Error reading attribute 'role', [%v]", err)
+		fmt.Println("Error reading attribute 'role'")
+		fmt.Println(err)
+		callerDetails.role = ""
+	} else {
+		callerDetails.role = string(roleBytes)
 	}
-	callerDetails.role = string(roleBytes)
-
-	//==============Optional Fields....for the time being=================================
 
 	issuerCodeBytes, err := stub.ReadCertAttribute("issuerCode")
 	if err != nil {
