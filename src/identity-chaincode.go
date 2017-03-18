@@ -297,8 +297,8 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 		return nil, fmt.Errorf("Access denied. Unknown role in Tcert -> " + callerDetails.role)
 	}
 
-	if len(identityParams) < 8 {
-		return nil, errors.New("Incomplete number of arguments. Expected 8 -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI]")
+	if len(identityParams) < 10 {
+		return nil, errors.New("Incomplete number of arguments. Expected 10 -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI, IssuerCode, IssuerOrganization ]")
 	}
 
 	if strings.EqualFold(callerDetails.role, ROLE_ISSUER) == false && strings.EqualFold(callerDetails.role, ROLE_PROVIDER) == false {
@@ -311,7 +311,7 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 	issuerVerified := false
 
 	//For providers, issuer details are required to be submitted
-	//Parameters should be in the order -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI]
+	//Parameters should be in the order -> [ProviderEnrollmentID, IdentityCode, IdentityTypeCode, EncryptedIdentityPayload, EncryptionKey, IssuerID,  MetaData, EncryptedAttachmentURI, IssuerCode, IssuerOrganization ]
 	if isProvider == true {
 		//Check for empty mandatory fields (first 5 fields)
 		for i := 0; i < 6; i++ {
@@ -320,6 +320,9 @@ func (t *IdentityChainCode) AddIdentity(stub shim.ChaincodeStubInterface, identi
 			}
 		}
 		issuerID = identityParams[5]
+		issuerCode = identityParams[8]
+		issuerOrganization = identityParams[9]
+		
 	} else {
 		//Issuer details are gotten from Transaction Certificate
 		//Check for empty mandatory fields
