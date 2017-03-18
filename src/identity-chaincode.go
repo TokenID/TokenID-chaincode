@@ -106,7 +106,7 @@ func (t *IdentityChainCode) Init(stub shim.ChaincodeStubInterface, function stri
 	}
 	//Create initial identity table
 	fmt.Println("Initializing Identity for ->" + args[0])
-	val, err := t.InitIdentity(stub, args)
+	val, err := t.InitIdentity(stub, args, true)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -116,7 +116,7 @@ func (t *IdentityChainCode) Init(stub shim.ChaincodeStubInterface, function stri
 //=================================================================================================================================
 //Initializes the Identity and sets the default states
 //=================================================================================================================================
-func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args []string, isDeploymentCall bool) ([]byte, error) {
 
 	if len(args) < 2 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 2 -> [providerEnrollmentID , identityPublicKey]")
@@ -128,7 +128,7 @@ func (t *IdentityChainCode) InitIdentity(stub shim.ChaincodeStubInterface, args 
 		return nil, fmt.Errorf("Error getting caller details, [%v]", err)
 	}
 	isProv := isProvider(callerDetails)
-	if isProv == false {
+	if isProv == false && isDeploymentCall == false { //If its a deployment call, TCert info will not be transmitted to other peers and the role won't be known
 		return nil, errors.New("Access Denied")
 	}
 
